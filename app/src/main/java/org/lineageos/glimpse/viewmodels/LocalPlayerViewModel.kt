@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: The LineageOS Project
+ * SPDX-FileCopyrightText: 2026 The ArkUI Project
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -40,6 +41,9 @@ import org.lineageos.glimpse.ext.rememberVideoPlaybackPositionEnabled
 import org.lineageos.glimpse.ext.removeVideoPlaybackPosition
 import org.lineageos.glimpse.ext.setVideoPlaybackPosition
 import org.lineageos.glimpse.models.AlbumType
+import org.lineageos.glimpse.home.GalleryQuery
+import org.lineageos.glimpse.home.GalleryStore
+import org.lineageos.glimpse.datasources.MediaError
 import org.lineageos.glimpse.models.MediaType
 import org.lineageos.glimpse.models.MotionPhoto
 import org.lineageos.glimpse.models.RequestStatus
@@ -165,7 +169,13 @@ class LocalPlayerViewModel(
                     flowOf(RequestStatus.Success(it.medias))
                 }
 
-                is IntentsViewModel.ParsedIntent.ReviewIntent -> album
+                is IntentsViewModel.ParsedIntent.ReviewIntent -> it.homeQuery?.let { encoded ->
+                    val query = GalleryQuery.decode(encoded)
+                    GalleryStore(applicationContext).observe().mapLatest { library ->
+                        if (library.error) RequestStatus.Error(MediaError.NOT_FOUND)
+                        else RequestStatus.Success(query.select(library).map { photo -> photo.media })
+                    }
+                } ?: album
 
                 is IntentsViewModel.ParsedIntent.SecureReviewIntent -> secureMedias
 

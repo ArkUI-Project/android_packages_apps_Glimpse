@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 The ArkUI Project
+     SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="gallery_photos">Photos</string>
+    <string name="gallery_collections">Collections</string>
+    <string name="gallery_common">Quick access</string>
+    <string name="gallery_all">All photos</string>
+    <string name="gallery_camera">Camera</string>
+    <string name="gallery_captures">Screenshots &amp; recordings</string>
+    <string name="gallery_cards">My cards</string>
+    <string name="gallery_documents">Documents</string>
+    <string name="gallery_ai">AI pictures</string>
+    <string name="gallery_other">Other albums</string>
+    <string name="gallery_people">People &amp; pets</string>
+    <string name="gallery_search">Search</string>
+    <string name="gallery_clear_search">Clear search</string>
+    <string name="gallery_search_hint">Name, album or date</string>
+    <string name="gallery_search_empty">Search your photos</string>
+    <string name="gallery_search_tip">Find a filename, collection, or date, such as 2026-10.</string>
+    <string name="gallery_no_results">No matching photos</string>
+    <string name="gallery_no_results_tip">Try another name or date, or change the filter.</string>
+    <string name="gallery_filter">View options</string>
+    <string name="gallery_more">More options</string>
+    <string name="gallery_today">Today</string>
+    <string name="gallery_yesterday">Yesterday</string>
+    <string name="gallery_empty">No photos yet</string>
+    <string name="gallery_empty_tip">Photos and videos saved on this device appear here.</string>
+    <string name="gallery_loading">Loading photos…</string>
+    <string name="gallery_error">Photos could not be loaded</string>
+    <string name="gallery_error_tip">Check photo and video permissions in Settings, then reopen Gallery.</string>
+    <string name="gallery_count">%1$d items</string>
+    <string name="gallery_new_album">New album</string>
+    <string name="gallery_new_person">New person or pet</string>
+    <string name="gallery_name">Name</string>
+    <string name="gallery_name_error">Enter a name</string>
+    <string name="gallery_add_photos">Add photos</string>
+    <string name="gallery_add_hint">Choose photos to keep together in this collection.</string>
+    <string name="gallery_people_hint">Organize photos of the people and pets you love. Tap to create a named collection.</string>
+    <string name="gallery_add_to">Add to album</string>
+    <string name="gallery_rename">Rename album</string>
+    <string name="gallery_remove_album">Remove album</string>
+    <string name="gallery_remove_album_message">Remove this collection? Your original photos and videos will stay on the device.</string>
+    <string name="gallery_remove_from_album">Remove from album</string>
+    <string name="gallery_added">Added to album</string>
+    <string name="gallery_removed">Removed from album</string>
+    <string name="gallery_select">Select photos</string>
+    <string name="gallery_select_all">Select all</string>
+    <string name="gallery_selected">%1$d selected</string>
+    <string name="gallery_selection_limit">Select up to 500 items at a time.</string>
+    <string name="gallery_done">Done</string>
+    <string name="gallery_share">Share</string>
+    <string name="gallery_favorite">Favorite</string>
+    <string name="gallery_trash">Recently deleted</string>
+    <string name="gallery_delete">Delete</string>
+    <string name="gallery_trash_confirm">Move %1$d items to Recently deleted? You can restore them for 30 days.</string>
+    <string name="gallery_operation_failed">The operation could not be completed. Try again.</string>
+    <string name="gallery_all_types">Photos and videos</string>
+    <string name="gallery_images_only">Photos only</string>
+    <string name="gallery_videos_only">Videos only</string>
+    <string name="gallery_newest">Newest first</string>
+    <string name="gallery_oldest">Oldest first</string>
+    <string name="gallery_grid">Grid size</string>
+    <string name="gallery_grid_option">%1$d columns</string>
+    <string name="gallery_order">Sort order</string>
+    <string name="gallery_media_type">Media type</string>
+</resources>

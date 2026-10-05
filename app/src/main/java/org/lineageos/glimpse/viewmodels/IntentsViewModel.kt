@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: The LineageOS Project
+ * SPDX-FileCopyrightText: 2026 The ArkUI Project
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -76,6 +77,7 @@ class IntentsViewModel(application: Application) : GlimpseViewModel(application)
         class ReviewIntent(
             val albumRequest: AlbumViewModel.AlbumRequest? = null,
             val initialMedia: Media? = null,
+            val homeQuery: String? = null,
         ) : ParsedIntent()
 
         /**
@@ -200,7 +202,13 @@ class IntentsViewModel(application: Application) : GlimpseViewModel(application)
                         ),
                         intent.extras?.getString(ViewActivity.EXTRA_MIME_TYPE),
                     ),
-                    mediaItems.filterIsInstance<Media>().firstOrNull(),
+                    mediaItems.filterIsInstance<Media>().firstOrNull()?.let { initial ->
+                        // Home uses the typed MediaStore URI for write requests; the legacy
+                        // repository returns a Files URI for the same row.
+                        if (intent.hasExtra(ViewActivity.EXTRA_HOME_QUERY) && intent.data != null)
+                            initial.copy(uri = intent.data!!) else initial
+                    },
+                    intent.getStringExtra(ViewActivity.EXTRA_HOME_QUERY),
                 )
 
                 MediaStore.ACTION_REVIEW_SECURE -> ParsedIntent.SecureReviewIntent(

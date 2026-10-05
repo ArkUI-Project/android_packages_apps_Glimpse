@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: The LineageOS Project
+ * SPDX-FileCopyrightText: 2026 The ArkUI Project
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -606,6 +607,7 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
         val EXTRA_ALBUM_URI = "${ViewActivity::class.qualifiedName}.album_uri"
         val EXTRA_MEDIA_TYPE = "${ViewActivity::class.qualifiedName}.media_type"
         val EXTRA_MIME_TYPE = "${ViewActivity::class.qualifiedName}.mime_type"
+        val EXTRA_HOME_QUERY = "${ViewActivity::class.qualifiedName}.home_query"
 
         /**
          * Create a [Bundle] to use as the extras for this activity.
