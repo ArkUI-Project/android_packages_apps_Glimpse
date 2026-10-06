@@ -31,7 +31,6 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.getSystemService
-import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
@@ -46,6 +45,8 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import com.bumptech.glide.Glide
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -106,7 +107,7 @@ open class GalleryHomeFragment : Fragment() {
             override fun getSpanSize(position: Int): Int = when (adapter?.currentList?.getOrNull(position)?.kind) {
                 GalleryRow.PHOTO -> 12 / effectiveColumns()
                 GalleryRow.COMMON, GalleryRow.PERSON -> if (resources.configuration.screenWidthDp >= 600) 3 else 6
-                GalleryRow.ALBUM -> if (resources.configuration.screenWidthDp >= 600) 2 else 4
+                GalleryRow.ALBUM -> if (resources.configuration.screenWidthDp >= 600) 3 else 6
                 else -> 12
             }
         }
@@ -144,18 +145,30 @@ open class GalleryHomeFragment : Fragment() {
         }
         back = object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                if (model.busy.value) return
                 when {
                     model.selecting -> {
                         val target = model.collectionTarget
+                        val folder = model.folderTarget
                         clearSelection()
                         if (target != null) { model.page = 1; open("collection:$target") }
+                        else if (folder != null) { model.page = 2; open("folder:$folder") }
                     }
                     model.searching -> {
                         hideKeyboard()
                         model.searching = false
                         model.currentQuery = model.currentQuery.copy(text = "")
                     }
-                    model.currentQuery.category != "all" -> open("all")
+                    model.currentQuery.category != "all" -> {
+                        val folder = currentFolder()
+                        val parent = folder?.path?.trimEnd('/')?.substringBeforeLast('/', "")
+                            ?.takeIf { it.isNotEmpty() }?.plus("/")
+                        val parentFolder = library.folders.firstOrNull {
+                            it.volume == folder?.volume && it.path == parent
+                        }
+                        if (parentFolder != null) open("folder:${parentFolder.id}")
+                        else switchTab(model.page)
+                    }
                     model.page != 0 -> switchTab(0)
                 }
             }
@@ -164,7 +177,7 @@ open class GalleryHomeFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 permissions.withPermissionsGranted {
-                    combine(model.content, model.tab, model.search) { content, _, _ -> content }
+                    combine(model.content, model.tab, model.search, model.busy) { content, _, _, _ -> content }
                         .collect { (data, photos) ->
                             library = data
                             visiblePhotos = photos
@@ -175,6 +188,25 @@ open class GalleryHomeFragment : Fragment() {
                 }
             }
         }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                model.completed.collect { (result, destination) ->
+                    folderResult(result)
+                    if (result.failedKeys.isNotEmpty() && model.selecting) {
+                        retainFailedSelection(result)
+                    } else if (result.succeeded > 0 || result.skipped > 0 ||
+                        (result.failed == 0 && result.error == null && result.folder != null)) {
+                        clearSelection()
+                        if (destination != null) { model.page = 2; open(destination) }
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        model.store.refresh()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -187,7 +219,7 @@ open class GalleryHomeFragment : Fragment() {
     private fun effectiveColumns() = if (resources.configuration.screenWidthDp >= 600 &&
         !model.store.preferences.contains("columns")) 6 else columns
     private fun isGrid() = model.page == 0 || model.searching || model.currentQuery.category !in
-        listOf("all", "albums", "people", "common")
+        listOf("all", "albums", "people", "common", "folders")
 
     private fun updateListInsets() {
         val side = if (isGrid()) 0 else requireContext().dp(15)
@@ -207,11 +239,12 @@ open class GalleryHomeFragment : Fragment() {
         val selecting = model.selecting
         val grid = isGrid()
         val searching = model.searching
+        val page = model.page
         val resources = resources
         renderJob?.cancel()
         renderJob = viewLifecycleOwner.lifecycleScope.launch {
             val rows = withContext(Dispatchers.Default) {
-                buildRows(snapshot, photos, query, selected, selecting, grid, searching, resources)
+                buildRows(snapshot, photos, query, selected, selecting, grid, searching, page, resources)
             }
             adapter?.submitList(rows) {
                 if (scrollToStart) { list.scrollToPosition(0); scrollToStart = false }
@@ -220,15 +253,30 @@ open class GalleryHomeFragment : Fragment() {
     }
 
     private fun buildRows(data: GalleryLibrary, photos: List<GalleryPhoto>, query: GalleryQuery,
-        selected: Set<String>, selecting: Boolean, grid: Boolean, searching: Boolean,
+        selected: Set<String>, selecting: Boolean, grid: Boolean, searching: Boolean, page: Int,
         resources: Resources): List<GalleryRow> = buildList {
         // Use the captured resources, not Fragment.requireContext(), on the worker. The
         // fragment can detach while a large timeline is being grouped during recreation.
         fun getString(id: Int, vararg args: Any) = resources.getString(id, *args)
+        fun folderCard(folder: GalleryFolder) = GalleryRow("folder:${folder.id}", GalleryRow.ALBUM,
+            folder.name, getString(R.string.gallery_folder_items, folder.activeCount) + "\n" +
+                if (folder.volume == MediaStore.VOLUME_EXTERNAL_PRIMARY) folder.path else "${folder.volume} · ${folder.path}",
+            folder.cover, "folder:${folder.id}", R.drawable.ic_gallery_folder)
         add(GalleryRow(if (grid) "photoSpace" else "space", GalleryRow.SPACE))
         if (grid) {
             add(GalleryRow("title", GalleryRow.TITLE, if (searching) getString(R.string.gallery_search)
                 else categoryName(query.category, data, resources)))
+            val folder = data.folder(query.category.removePrefix("folder:"))
+                .takeIf { query.category.startsWith("folder:") }
+            if (folder != null && !searching) {
+                add(GalleryRow("folderPath", GalleryRow.FOOTER, folder.path))
+                val children = data.folders.filter { it.volume == folder.volume &&
+                    it.path != folder.path && it.path.trimEnd('/').substringBeforeLast('/', "") + "/" == folder.path }
+                if (children.isNotEmpty()) {
+                    add(GalleryRow("subfolders", GalleryRow.SECTION, getString(R.string.gallery_folders)))
+                    addAll(children.map(::folderCard))
+                }
+            }
             if (data.loading || data.error) {
                 add(GalleryRow("state", GalleryRow.EMPTY, getString(if (data.error) R.string.gallery_error
                     else R.string.gallery_loading), if (data.error) getString(R.string.gallery_error_tip) else ""))
@@ -238,13 +286,16 @@ open class GalleryHomeFragment : Fragment() {
                     searching && query.text.isBlank() -> R.string.gallery_search_empty
                     searching -> R.string.gallery_no_results
                     collection -> R.string.gallery_add_photos
+                    folder != null -> R.string.gallery_folder_empty
                     else -> R.string.gallery_empty
                 }), getString(when {
                     searching && query.text.isBlank() -> R.string.gallery_search_tip
                     searching -> R.string.gallery_no_results_tip
                     collection -> R.string.gallery_add_hint
+                    folder != null -> R.string.gallery_folder_empty_tip
                     else -> R.string.gallery_empty_tip
-                }), action = if (collection) "add:${query.category.removePrefix("collection:")}" else ""))
+                }), action = if (collection) "add:${query.category.removePrefix("collection:")}" else
+                    if (folder != null) "folderAdd:${folder.id}" else ""))
             } else {
                 var previous: LocalDate? = null
                 val today = LocalDate.now()
@@ -273,6 +324,19 @@ open class GalleryHomeFragment : Fragment() {
                 add(GalleryRow("count", GalleryRow.FOOTER, getString(R.string.gallery_count, photos.size)))
             }
         } else {
+            if (page == 2 || query.category == "folders") {
+                add(GalleryRow("foldersTitle", GalleryRow.TITLE, getString(R.string.gallery_folders)))
+                if (data.loading || data.error) {
+                    add(GalleryRow("folderState", GalleryRow.EMPTY, getString(if (data.error)
+                        R.string.gallery_error else R.string.gallery_loading)))
+                } else {
+                    val roots = data.folders.filter { it.path.trimEnd('/').count { c -> c == '/' } == 0 }
+                    addAll(roots.map(::folderCard))
+                    add(GalleryRow("newFolder", GalleryRow.EMPTY, getString(R.string.gallery_new_folder),
+                        getString(R.string.gallery_folders_hint), action = "newFolder", icon = R.drawable.ic_gallery_folder))
+                }
+                return@buildList
+            }
             val active = data.photos.filterNot { it.media.isTrashed }.sortedByDescending { it.taken }
             fun card(id: String, name: String, items: List<GalleryPhoto>, kind: Int, icon: Int = R.drawable.ic_albums) =
                 GalleryRow(id, kind, name, items.size.toString(), items.firstOrNull(), id, icon)
@@ -295,10 +359,6 @@ open class GalleryHomeFragment : Fragment() {
                             active.filter { it.key in collection.members }, GalleryRow.ALBUM,
                             when (collection.id) { "cards", "documents" -> R.drawable.ic_contact_page
                                 "ai" -> R.drawable.ic_star; else -> R.drawable.ic_albums }))
-                    }
-                    active.groupBy { it.media.albumUri }.values.forEach { bucket ->
-                        add(card("bucket:${bucket.first().media.albumUri.lastPathSegment}",
-                            bucket.first().media.albumName.orEmpty(), bucket, GalleryRow.ALBUM))
                     }
                 }
                 if (query.category == "all" && albums.size > 6) {
@@ -343,7 +403,9 @@ open class GalleryHomeFragment : Fragment() {
         "common" -> resources.getString(R.string.gallery_common)
         "albums" -> resources.getString(R.string.albums_title)
         "people" -> resources.getString(R.string.gallery_people)
-        else -> if (category.startsWith("collection:")) data.collection(category.removePrefix("collection:"))
+        "folders" -> resources.getString(R.string.gallery_folders)
+        else -> if (category.startsWith("folder:")) data.folder(category.removePrefix("folder:"))?.name.orEmpty()
+            else if (category.startsWith("collection:")) data.collection(category.removePrefix("collection:"))
             ?.let { collectionName(it, resources) }.orEmpty() else data.photos.firstOrNull {
                 it.media.albumUri.lastPathSegment == category.removePrefix("bucket:")
             }?.media?.albumName.orEmpty()
@@ -358,13 +420,15 @@ open class GalleryHomeFragment : Fragment() {
         setPadding(context.dp(12), context.dp(12), context.dp(12), context.dp(12))
         clickableSurface(Color.TRANSPARENT)
         layoutParams = LinearLayout.LayoutParams(context.dp(48), context.dp(48))
-        setOnClickListener { action() }
+        isEnabled = !model.busy.value
+        setOnClickListener { if (!model.busy.value) action() }
     }
 
     private fun renderToolbar() {
         val query = model.currentQuery
-        val mode = if (model.selecting) "select:${model.selected.size}" else if (model.searching) "search"
+        val mode = (if (model.selecting) "select:${model.selected.size}" else if (model.searching) "search"
             else "${query.category}:${model.page}"
+            ) + ":${model.busy.value}"
         if (toolbarMode == mode) return
         toolbarMode = mode
         toolbar.removeAllViews()
@@ -391,7 +455,8 @@ open class GalleryHomeFragment : Fragment() {
             val nested = query.category != "all" || model.selecting
             if (nested) toolbar.addView(iconButton(if (model.selecting) R.drawable.ic_close else R.drawable.ic_back,
                 android.R.string.cancel) { back.handleOnBackPressed() })
-            val title = c.label(if (model.selecting) getString(R.string.gallery_selected, model.selected.size)
+            val title = c.label(if (model.busy.value) getString(R.string.gallery_folder_working)
+                else if (model.selecting) getString(R.string.gallery_selected, model.selected.size)
                 else if (nested && !isGrid()) categoryName(query.category) else "", 16f).apply {
                 maxLines = 1; ellipsize = TextUtils.TruncateAt.END
             }
@@ -404,6 +469,8 @@ open class GalleryHomeFragment : Fragment() {
                 })
             } else if (isGrid()) {
                 toolbar.addView(iconButton(R.drawable.ic_gallery_filter, R.string.gallery_filter, ::showFilter))
+            } else if (model.page == 2) {
+                toolbar.addView(iconButton(R.drawable.ic_gallery_add, R.string.gallery_new_folder) { createFolder() })
             }
             toolbar.addView(iconButton(R.drawable.ic_gallery_more, R.string.gallery_more) {
                 showMenu(toolbar.getChildAt(toolbar.childCount - 1))
@@ -411,30 +478,29 @@ open class GalleryHomeFragment : Fragment() {
         }
     }
 
-    private fun glass(view: View) {
+    private fun tonalSurface(view: View) {
         val c = view.context
-        view.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(
-            ColorUtils.setAlphaComponent(c.tone(MaterialR.attr.colorSurfaceContainerHigh), 245),
-            ColorUtils.setAlphaComponent(c.tone(MaterialR.attr.colorSurfaceContainer), 235))).apply {
+        view.background = GradientDrawable().apply {
+            setColor(c.tone(MaterialR.attr.colorSurfaceContainerHigh))
             cornerRadius = c.dp(32).toFloat()
-            setStroke(c.dp(1), ColorUtils.setAlphaComponent(c.tone(MaterialR.attr.colorOnSurface), 24))
         }
-        view.elevation = c.dp(3).toFloat()
+        view.elevation = c.dp(2).toFloat()
     }
 
     private fun renderBottom() {
         bottom.removeAllViews()
         val c = requireContext()
-        val group = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; glass(this) }
+        val group = LinearLayout(c).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; tonalSurface(this) }
         fun button(label: Int, icon: Int, selected: Boolean = false, action: () -> Unit): View {
             val item = LinearLayout(c).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(c.dp(6), c.dp(5), c.dp(6), c.dp(4))
-                clickableSurface(if (selected) ColorUtils.setAlphaComponent(c.tone(MaterialR.attr.colorSecondaryContainer), 160)
+                clickableSurface(if (selected) c.tone(MaterialR.attr.colorSecondaryContainer)
                     else Color.TRANSPARENT, 28)
                 contentDescription = getString(label)
                 isSelected = selected
-                setOnClickListener { action() }
+                isEnabled = !model.busy.value
+                setOnClickListener { if (!model.busy.value) action() }
             }
             val image = ImageView(c).apply {
                 setImageResource(icon)
@@ -446,17 +512,20 @@ open class GalleryHomeFragment : Fragment() {
         }
         if (model.selecting) {
             val target = model.collectionTarget
-            val actions: List<Pair<Pair<Int, Int>, () -> Unit>> = if (target != null) listOf(
+            val folder = model.folderTarget
+            val actions: List<Pair<Pair<Int, Int>, () -> Unit>> = if (folder != null) listOf(
+                (R.string.gallery_done to R.drawable.ic_done) to { completeFolderAdd(folder) }
+            ) else if (target != null) listOf(
                 (R.string.gallery_done to R.drawable.ic_done) to { completeAdd(target) }
             ) else listOf(
                 (R.string.gallery_share to R.drawable.ic_share) to { share() },
-                (R.string.gallery_add_to to R.drawable.ic_gallery_add) to { chooseCollection() },
-                (R.string.gallery_favorite to R.drawable.ic_star_border) to { favorite() },
-                (R.string.gallery_delete to R.drawable.ic_delete) to { trash() },
+                (R.string.gallery_move to R.drawable.ic_gallery_folder) to { transfer(false) },
+                (R.string.gallery_copy to R.drawable.ic_gallery_add) to { transfer(true) },
+                (R.string.gallery_more to R.drawable.ic_gallery_more) to { showMenu(bottom) },
             )
             actions.forEach { (info, action) ->
                 group.addView(button(info.first, info.second, action = action).apply {
-                    isEnabled = model.selected.isNotEmpty()
+                    isEnabled = model.selected.isNotEmpty() && !model.busy.value
                     alpha = if (isEnabled) 1f else .38f
                 }, LinearLayout.LayoutParams(c.dp(76), c.dp(56)))
             }
@@ -464,10 +533,13 @@ open class GalleryHomeFragment : Fragment() {
         } else {
             group.addView(button(R.string.gallery_photos, R.drawable.ic_image, model.page == 0 && !model.searching) {
                 switchTab(0)
-            }, LinearLayout.LayoutParams(c.dp(86), c.dp(56)))
+            }, LinearLayout.LayoutParams(c.dp(72), c.dp(56)))
             group.addView(button(R.string.gallery_collections, R.drawable.ic_albums, model.page == 1 && !model.searching) {
                 switchTab(1)
-            }, LinearLayout.LayoutParams(c.dp(86), c.dp(56)))
+            }, LinearLayout.LayoutParams(c.dp(72), c.dp(56)))
+            group.addView(button(R.string.gallery_folders, R.drawable.ic_gallery_folder, model.page == 2 && !model.searching) {
+                switchTab(2)
+            }, LinearLayout.LayoutParams(c.dp(72), c.dp(56)))
             bottom.addView(group)
             val search = iconButton(R.drawable.ic_gallery_search, R.string.gallery_search) {
                 model.searching = true
@@ -479,7 +551,7 @@ open class GalleryHomeFragment : Fragment() {
                     post { c.getSystemService<InputMethodManager>()?.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT) }
                 }
             }
-            glass(search)
+            tonalSurface(search)
             bottom.addView(search, LinearLayout.LayoutParams(c.dp(56), c.dp(56)).apply { marginStart = c.dp(12) })
         }
     }
@@ -506,6 +578,7 @@ open class GalleryHomeFragment : Fragment() {
     }
 
     private fun onClick(row: GalleryRow) {
+        if (model.busy.value) return
         if (row.kind == GalleryRow.PHOTO) {
             val photo = row.cover ?: return
             if (model.selecting) toggle(photo.key) else {
@@ -521,21 +594,27 @@ open class GalleryHomeFragment : Fragment() {
             row.action == "all" -> switchTab(0)
             row.action == "newAlbum" -> createCollection(false)
             row.action == "newPerson" -> createCollection(true)
+            row.action == "newFolder" -> createFolder()
+            row.action.startsWith("folderAdd:") -> folderAddChoice(row.action.removePrefix("folderAdd:"))
             row.action.startsWith("add:") -> beginAdd(row.action.removePrefix("add:"))
             row.action.isNotEmpty() -> open(row.action)
         }
     }
 
     private fun onHold(row: GalleryRow) {
+        if (model.busy.value) return
         if (row.kind == GalleryRow.PHOTO) {
             model.selecting = true
             row.cover?.let { toggle(it.key) }
         } else if (row.action.startsWith("collection:")) {
             collectionMenu(row.action.removePrefix("collection:"))
+        } else if (row.action.startsWith("folder:")) {
+            library.folder(row.action.removePrefix("folder:"))?.let(::folderMenu)
         }
     }
 
     private fun toggle(key: String) {
+        if (model.busy.value) return
         if (key !in model.selected && model.selected.size >= 500) {
             toast(R.string.gallery_selection_limit); return
         }
@@ -547,12 +626,19 @@ open class GalleryHomeFragment : Fragment() {
         model.selected = emptySet()
         model.selecting = false
         model.collectionTarget = null
+        model.folderTarget = null
         render()
     }
 
     private fun showMenu(anchor: View) {
         val popup = PopupMenu(requireContext(), anchor)
         val actions = mutableListOf<Pair<Int, () -> Unit>>()
+        if (model.busy.value) return
+        if (model.selecting && model.selected.isNotEmpty() && model.collectionTarget == null && model.folderTarget == null) {
+            actions += R.string.gallery_add_to to { chooseCollection() }
+            actions += R.string.gallery_favorite to { favorite() }
+            actions += R.string.gallery_delete to { trash() }
+        }
         if (model.selecting && model.currentQuery.category.startsWith("collection:")) {
             actions += R.string.gallery_remove_from_album to {
                 model.store.updateMembers(model.currentQuery.category.removePrefix("collection:"), model.selected, false)
@@ -564,6 +650,10 @@ open class GalleryHomeFragment : Fragment() {
                 model.selected = visiblePhotos.take(500).mapTo(linkedSetOf()) { it.key }; render()
             }
         } else {
+            currentFolder()?.let { folder ->
+                actions += R.string.gallery_folder_manage to { folderMenu(folder) }
+            }
+            actions += R.string.gallery_new_folder to { createFolder(currentFolder()) }
             if (isGrid()) actions += R.string.gallery_select to { model.selecting = true; render() }
             model.currentQuery.category.takeIf { it.startsWith("collection:") }?.removePrefix("collection:")?.let { id ->
                 actions += R.string.gallery_add_photos to { beginAdd(id) }
@@ -611,25 +701,30 @@ open class GalleryHomeFragment : Fragment() {
             }.show()
     }
 
-    private fun nameDialog(title: Int, initial: String = "", action: (String) -> Unit) {
+    private fun nameDialog(title: Int, initial: String = "", physical: Boolean = false, action: (String) -> Unit) {
         val c = requireContext()
-        val input = EditText(c).apply {
-            hint = getString(R.string.gallery_name); setSingleLine(); setText(initial)
+        val field = TextInputLayout(c).apply { hint = getString(R.string.gallery_name) }
+        val input = TextInputEditText(field.context).apply {
+            setSingleLine(); setText(initial)
             filters = arrayOf(InputFilter.LengthFilter(80))
             setSelectAllOnFocus(true)
         }
+        field.addView(input, LinearLayout.LayoutParams(-1, -2))
         val wrapper = FrameLayout(c).apply {
             setPadding(c.dp(24), c.dp(8), c.dp(24), 0)
-            addView(input, FrameLayout.LayoutParams(-1, -2))
+            addView(field, FrameLayout.LayoutParams(-1, -2))
         }
         val dialog = MaterialAlertDialogBuilder(c).setTitle(title).setView(wrapper)
             .setNegativeButton(android.R.string.cancel, null).setPositiveButton(R.string.gallery_done, null).create()
         dialog.setOnShowListener {
             dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val name = input.text.toString().trim()
-                if (name.isBlank()) input.error = getString(R.string.gallery_name_error)
+                if (name.isBlank()) field.error = getString(R.string.gallery_name_error)
+                else if (physical && !GalleryFolders.validName(name)) field.error = getString(R.string.gallery_folder_invalid_name)
                 else { action(name); dialog.dismiss() }
             }
+            input.requestFocus()
+            dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
         }
         dialog.show()
     }
@@ -663,6 +758,7 @@ open class GalleryHomeFragment : Fragment() {
     }
 
     private fun beginAdd(id: String) {
+        model.folderTarget = null
         model.collectionTarget = id
         model.selected = emptySet()
         model.selecting = true
@@ -689,6 +785,96 @@ open class GalleryHomeFragment : Fragment() {
                     clearSelection(); toast(R.string.gallery_added)
                 }
             }.show()
+    }
+
+    private fun currentFolder() = model.currentQuery.category.takeIf { it.startsWith("folder:") }
+        ?.removePrefix("folder:")?.let(library::folder)
+
+    private fun createFolder(parent: GalleryFolder? = null) {
+        if (model.busy.value) return
+        nameDialog(R.string.gallery_new_folder, physical = true) { name ->
+            model.mutate { model.store.folders.create(name, parent) }
+        }
+    }
+
+    private fun folderMenu(folder: GalleryFolder) {
+        if (model.busy.value) return
+        val actions = mutableListOf<Pair<Int, () -> Unit>>()
+        if (folder.canReceive) {
+            actions += R.string.gallery_new_subfolder to { createFolder(folder) }
+            actions += R.string.gallery_add_photos to { folderAddChoice(folder.id) }
+        }
+        if (folder.canModify) {
+            actions += R.string.gallery_folder_rename to {
+                nameDialog(R.string.gallery_folder_rename, folder.name, physical = true) { name ->
+                    model.mutate { model.store.folders.rename(folder, name) }
+                }
+            }
+            actions += R.string.gallery_folder_delete to {
+                MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.gallery_folder_delete)
+                    .setMessage(getString(R.string.gallery_folder_delete_confirm, folder.path, folder.totalCount))
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.gallery_folder_delete) { _, _ ->
+                        model.mutate("folders") { model.store.folders.delete(folder) }
+                    }.show()
+            }
+        }
+        if (actions.isEmpty()) return
+        MaterialAlertDialogBuilder(requireContext()).setTitle(folder.name)
+            .setItems(actions.map { getString(it.first) }.toTypedArray()) { _, index -> actions[index].second() }.show()
+    }
+
+    private fun folderAddChoice(id: String) {
+        if (library.folder(id)?.canReceive != true || model.busy.value) return
+        MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.gallery_add_photos)
+            .setItems(arrayOf(getString(R.string.gallery_move), getString(R.string.gallery_copy))) { _, index ->
+                model.collectionTarget = null
+                model.folderTarget = id
+                model.folderCopy = index == 1
+                model.selected = emptySet()
+                model.selecting = true
+                model.page = 0
+                open("all")
+            }.show()
+    }
+
+    private fun completeFolderAdd(id: String) {
+        val folder = library.folder(id) ?: return
+        val photos = library.photos.filter { it.key in model.selected }
+        if (photos.isEmpty() || model.busy.value) return
+        val copy = model.folderCopy
+        model.mutate("folder:$id") { model.store.folders.transfer(photos, folder, copy) }
+    }
+
+    private fun transfer(copy: Boolean) {
+        val photos = library.photos.filter { it.key in model.selected }
+        if (photos.isEmpty() || model.busy.value) return
+        GalleryFolderActions.showDestination(requireActivity(), photos, copy) { result ->
+            if (view != null) {
+                if (result.failedKeys.isNotEmpty()) retainFailedSelection(result)
+                else if (result.succeeded > 0 || result.skipped > 0) clearSelection()
+                model.store.refresh()
+            }
+        }
+    }
+
+    private fun retainFailedSelection(result: GalleryFolderResult) {
+        model.selected = result.failedKeys.intersect(library.photos.mapTo(HashSet()) { it.key })
+        if (model.selected.isEmpty()) clearSelection() else render()
+    }
+
+    private fun folderResult(result: GalleryFolderResult) {
+        val error = when (result.error) {
+            GalleryFolderError.INVALID_NAME -> R.string.gallery_folder_invalid_name
+            GalleryFolderError.EXISTS -> R.string.gallery_folder_exists
+            GalleryFolderError.NOT_FOUND -> R.string.gallery_folder_missing
+            GalleryFolderError.NEEDS_ACCESS -> R.string.gallery_folder_access
+            GalleryFolderError.CONTAINS_OTHER_FILES -> R.string.gallery_folder_other_files
+            GalleryFolderError.IO -> R.string.gallery_operation_failed
+            null -> null
+        }
+        val counts = getString(R.string.gallery_folder_result, result.succeeded, result.failed, result.skipped)
+        Toast.makeText(requireContext(), if (error == null) counts else "$counts\n${getString(error)}", Toast.LENGTH_LONG).show()
     }
 
     private fun selectedMedia() = library.photos.filter { it.key in model.selected }.map { it.media }

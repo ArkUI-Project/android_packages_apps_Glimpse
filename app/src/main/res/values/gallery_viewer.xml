@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 The ArkUI Project
+     SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <dimen name="viewer_action_padding">16dp</dimen>
+    <style name="Widget.Glimpse.Viewer.IconButton" parent="Widget.Material3.Button.TextButton">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:minWidth">48dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="cornerRadius">24dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">0dp</item>
+        <item name="iconSize">24dp</item>
+        <item name="iconTint">?attr/colorOnSurface</item>
+    </style>
+    <style name="Widget.Glimpse.Viewer.Action" parent="Widget.Material3.Button.TextButton">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:minWidth">48dp</item>
+        <item name="android:minHeight">72dp</item>
+        <item name="android:drawableTint">?attr/colorOnSurface</item>
+        <item name="android:drawablePadding">4dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:paddingStart">2dp</item>
+        <item name="android:paddingEnd">2dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="android:textAppearance">?attr/textAppearanceLabelLarge</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+        <item name="cornerRadius">28dp</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+    </style>
+    <string name="viewer_back">Back</string>
+    <string name="viewer_rotate">Rotate screen</string>
+    <string name="viewer_share">Send</string>
+    <string name="viewer_favorite">Favorite</string>
+    <string name="viewer_favorited">Saved</string>
+    <string name="viewer_delete">Delete</string>
+    <string name="viewer_restore">Restore</string>
+    <string name="viewer_more">More</string>
+    <string name="viewer_time_source">%1$s · %2$s</string>
+</resources>

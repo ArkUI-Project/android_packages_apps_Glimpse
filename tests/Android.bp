@@ -1,0 +1,21 @@
+// SPDX-FileCopyrightText: 2026 The ArkUI Project
+// SPDX-License-Identifier: Apache-2.0
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+android_test {
+    name: "GlimpseFolderTests",
+    srcs: ["src/**/*.kt"],
+    manifest: "AndroidManifest.xml",
+    sdk_version: "36",
+    instrumentation_for: "Glimpse",
+    static_libs: [
+        "androidx.test.runner",
+        "junit",
+        "kotlinx_coroutines",
+        "kotlin-stdlib",
+    ],
+    test_suites: ["device-tests"],
+}

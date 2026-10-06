@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 The ArkUI Project
+     SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="gallery_folders">文件夹</string>
+    <string name="gallery_folder_items">%1$d 项</string>
+    <string name="gallery_folders_hint">浏览真实存储目录，新建文件夹默认保存在 Pictures 中。</string>
+    <string name="gallery_new_folder">新建文件夹</string>
+    <string name="gallery_new_subfolder">新建子文件夹</string>
+    <string name="gallery_folder_empty">此文件夹暂无照片</string>
+    <string name="gallery_folder_empty_tip">点按以移动或复制照片到这里，子文件夹显示在上方。</string>
+    <string name="gallery_folder_manage">管理文件夹</string>
+    <string name="gallery_folder_rename">重命名文件夹</string>
+    <string name="gallery_folder_delete">删除文件夹</string>
+    <string name="gallery_folder_delete_confirm">永久删除 %1$s 及其子文件夹，包括其中 %2$d 张照片和视频（含最近删除的内容）？此操作无法撤销。其他类型文件会保留，可能导致文件夹无法删除。</string>
+    <string name="gallery_move">移动</string>
+    <string name="gallery_copy">复制</string>
+    <string name="gallery_folder_working">正在更新文件…</string>
+    <string name="gallery_folder_invalid_name">文件夹名称不能包含 /、\\、: 或控制字符。</string>
+    <string name="gallery_folder_exists">已存在同名文件夹。</string>
+    <string name="gallery_folder_missing">文件夹或文件已不存在。</string>
+    <string name="gallery_folder_access">相册无法修改此位置，请选择公共照片或视频目录。</string>
+    <string name="gallery_folder_other_files">仍有其他文件或无法访问的内容，已保留文件夹。</string>
+    <string name="gallery_folder_result">完成 %1$d 项 · 失败 %2$d 项 · 跳过 %3$d 项</string>
+</resources>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 The ArkUI Project
+     SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="gallery_folders">Folders</string>
+    <string name="gallery_folder_items">%1$d items</string>
+    <string name="gallery_folders_hint">Browse actual storage folders. New folders are created in Pictures.</string>
+    <string name="gallery_new_folder">New folder</string>
+    <string name="gallery_new_subfolder">New subfolder</string>
+    <string name="gallery_folder_empty">No photos in this folder</string>
+    <string name="gallery_folder_empty_tip">Tap to move or copy photos here. Subfolders appear above.</string>
+    <string name="gallery_folder_manage">Manage folder</string>
+    <string name="gallery_folder_rename">Rename folder</string>
+    <string name="gallery_folder_delete">Delete folder</string>
+    <string name="gallery_folder_delete_confirm">Permanently delete %1$s and its subfolders, including %2$d photos and videos (also recently deleted items)? This cannot be undone. Other file types are kept and may prevent the folder from being removed.</string>
+    <string name="gallery_move">Move</string>
+    <string name="gallery_copy">Copy</string>
+    <string name="gallery_folder_working">Updating files…</string>
+    <string name="gallery_folder_invalid_name">Use a folder name without /, \\, : or control characters.</string>
+    <string name="gallery_folder_exists">A folder with this name already exists.</string>
+    <string name="gallery_folder_missing">This folder or file is no longer available.</string>
+    <string name="gallery_folder_access">Gallery cannot change this location. Choose a public photo or video folder.</string>
+    <string name="gallery_folder_other_files">Other files or inaccessible items remain. The folder has been kept.</string>
+    <string name="gallery_folder_result">Completed %1$d · Failed %2$d · Skipped %3$d</string>
+</resources>

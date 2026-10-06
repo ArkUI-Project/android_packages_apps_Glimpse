@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
      SPDX-FileCopyrightText: The LineageOS Project
+     SPDX-FileCopyrightText: 2026 The ArkUI Project
      SPDX-License-Identifier: Apache-2.0
 -->
 <resources>
     <!-- Base application theme -->
-    <style name="Theme.Glimpse" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.Glimpse" parent="Theme.Material3Expressive.DayNight.NoActionBar">
         <item name="android:windowLayoutInDisplayCutoutMode">always</item>
         <item name="windowActionModeOverlay">true</item>
     </style>
@@ -23,7 +24,7 @@
     </style>
 
     <!-- Media viewer -->
-    <style name="Theme.Glimpse.MediaViewer" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Theme.Glimpse.MediaViewer" parent="Theme.Glimpse">
         <item name="android:windowLayoutInDisplayCutoutMode">always</item>
     </style>
 
@@ -35,13 +36,13 @@
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>
-        <item name="android:drawableTint">@android:color/white</item>
+        <item name="android:drawableTint">?attr/colorOnSurface</item>
         <item name="android:hyphenationFrequency">normal</item>
         <item name="android:maxLines">3</item>
         <item name="android:maxWidth">320dp</item>
         <item name="android:padding">8dp</item>
         <item name="android:textAppearance">?attr/textAppearanceCaption</item>
-        <item name="android:textColor">@android:color/white</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
         <item name="backgroundTint">@android:color/transparent</item>
         <item name="rippleColor">?attr/colorControlHighlight</item>
     </style>

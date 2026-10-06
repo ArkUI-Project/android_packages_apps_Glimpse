@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
      SPDX-FileCopyrightText: The LineageOS Project
+     SPDX-FileCopyrightText: 2026 The ArkUI Project
      SPDX-License-Identifier: Apache-2.0
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
@@ -18,5 +19,13 @@
         android:contentDescription="@string/file_action_information"
         android:icon="@drawable/ic_info"
         android:title="@string/file_action_information" />
+
+    <item
+        android:id="@+id/moveToFolder"
+        android:title="@string/folder_action_move_to" />
+
+    <item
+        android:id="@+id/copyToFolder"
+        android:title="@string/folder_action_copy_to" />
 
 </menu>

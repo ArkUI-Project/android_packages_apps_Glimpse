@@ -110,7 +110,9 @@ internal class GalleryHomeAdapter(
             GalleryRow.PHOTO -> {
                 val root = SquareFrame(c)
                 margin(root, -2, 0, 0)
-                root.setPadding(c.dp(1), c.dp(1), c.dp(1), c.dp(1))
+                root.setPadding(c.dp(2), c.dp(2), c.dp(2), c.dp(2))
+                root.background = c.shape(c.tone(MaterialR.attr.colorSurfaceContainer), 16)
+                root.clipToOutline = true
                 val photo = image()
                 root.addView(photo, FrameLayout.LayoutParams(-1, -1))
                 val duration = c.label("", 12f).apply {
@@ -132,7 +134,7 @@ internal class GalleryHomeAdapter(
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setPadding(c.dp(7), c.dp(7), c.dp(7), c.dp(7))
-                    clickableSurface(c.tone(MaterialR.attr.colorSurfaceContainerLowest), 20)
+                    clickableSurface(c.tone(MaterialR.attr.colorSurfaceContainerHigh), 24)
                 }
                 margin(root, 70, 5, 6)
                 val photo = image().apply {
@@ -151,7 +153,11 @@ internal class GalleryHomeAdapter(
                 Holder(root, title, count, photo)
             }
             GalleryRow.ALBUM, GalleryRow.PERSON -> {
-                val root = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+                val root = LinearLayout(c).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(c.dp(8), c.dp(8), c.dp(8), c.dp(10))
+                    clickableSurface(c.tone(MaterialR.attr.colorSurfaceContainer), 28)
+                }
                 margin(root, -2, 6, 6)
                 val frame = SquareFrame(c).apply {
                     background = c.shape(c.tone(MaterialR.attr.colorSurfaceContainerHigh), 22)
@@ -165,7 +171,10 @@ internal class GalleryHomeAdapter(
                     maxLines = 1; ellipsize = TextUtils.TruncateAt.END
                     setPadding(c.dp(6), c.dp(9), c.dp(4), c.dp(4))
                 }
-                val count = c.label("", 12f, true).apply { setPadding(c.dp(6), 0, 0, c.dp(5)) }
+                val count = c.label("", 12f, true).apply {
+                    setPadding(c.dp(6), 0, c.dp(4), c.dp(5))
+                    maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+                }
                 root.addView(frame); root.addView(title); root.addView(count)
                 Holder(root, title, count, photo, symbol = symbol)
             }
@@ -185,7 +194,7 @@ internal class GalleryHomeAdapter(
                 }
                 val detail = c.label("", 14f, true).apply { gravity = Gravity.CENTER; minHeight = c.dp(48) }
                 root.addView(title); root.addView(detail)
-                Holder(root, title, detail)
+                Holder(root, title, detail, image = icon)
             }
             else -> {
                 val title = c.label("", when (viewType) {
@@ -194,7 +203,9 @@ internal class GalleryHomeAdapter(
                     else -> 13f
                 }, viewType == GalleryRow.FOOTER)
                 title.setPadding(c.dp(25), 0, c.dp(25), 0)
-                if (viewType == GalleryRow.TITLE) title.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+                if (viewType == GalleryRow.TITLE || viewType == GalleryRow.SECTION) {
+                    title.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                }
                 margin(title, when (viewType) {
                     GalleryRow.SPACE -> 76
                     GalleryRow.TITLE -> 72
@@ -242,17 +253,27 @@ internal class GalleryHomeAdapter(
                     .placeholder(R.drawable.thumbnail_placeholder)
                     .error(R.drawable.ic_no_photography).into(image)
             }
-            image.alpha = if (row.selected) .65f else 1f
+            image.alpha = 1f
+        }
+        if (row.kind == GalleryRow.PHOTO) {
+            holder.root.background = c.shape(c.tone(if (row.selected)
+                androidx.appcompat.R.attr.colorPrimary else MaterialR.attr.colorSurfaceContainer), 16)
+            val padding = c.dp(if (row.selected) 4 else 2)
+            holder.root.setPadding(padding, padding, padding, padding)
+        }
+        if (row.kind == GalleryRow.EMPTY) {
+            holder.image?.apply {
+                setImageResource(if (row.icon == R.drawable.ic_albums) R.drawable.ic_image else row.icon)
+                imageTintList = ColorStateList.valueOf(c.tone(MaterialR.attr.colorOnSurfaceVariant))
+            }
+            holder.root.clickableSurface(c.tone(if (row.action.isNotEmpty())
+                MaterialR.attr.colorSurfaceContainer else MaterialR.attr.colorSurface), 28)
         }
         holder.symbol?.apply {
             isVisible = row.cover == null
             setImageResource(row.icon)
             imageTintList = ColorStateList.valueOf(c.tone(androidx.appcompat.R.attr.colorPrimary))
-            (parent as View).background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
-                intArrayOf(c.tone(MaterialR.attr.colorSurfaceContainerHigh),
-                    c.tone(MaterialR.attr.colorSecondaryContainer))).apply {
-                cornerRadius = c.dp(22).toFloat()
-            }
+            (parent as View).background = c.shape(c.tone(MaterialR.attr.colorSecondaryContainer), 22)
         }
         holder.marker?.apply {
             isVisible = row.selecting || row.cover?.media?.isFavorite == true

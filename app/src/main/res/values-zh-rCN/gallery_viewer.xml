@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 The ArkUI Project
+     SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="viewer_back">返回</string>
+    <string name="viewer_rotate">旋转屏幕</string>
+    <string name="viewer_share">发送</string>
+    <string name="viewer_favorite">收藏</string>
+    <string name="viewer_favorited">已收藏</string>
+    <string name="viewer_delete">删除</string>
+    <string name="viewer_restore">恢复</string>
+    <string name="viewer_more">更多</string>
+    <string name="viewer_time_source">%1$s · %2$s</string>
+</resources>

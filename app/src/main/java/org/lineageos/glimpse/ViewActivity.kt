@@ -7,8 +7,9 @@
 package org.lineageos.glimpse
 
 import android.app.KeyguardManager
-import android.app.KeyguardManager.KeyguardDismissCallback
+import android.content.ContentUris
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
@@ -16,6 +17,8 @@ import android.provider.MediaStore
 import android.util.Log
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.PopupMenu
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,11 +35,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.appbar.AppBarLayout
-import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.lineageos.glimpse.datasources.MediaError
 import org.lineageos.glimpse.ext.buildEditIntent
 import org.lineageos.glimpse.ext.buildShareIntent
@@ -46,6 +51,8 @@ import org.lineageos.glimpse.ext.createFavoriteRequest
 import org.lineageos.glimpse.ext.createTrashRequest
 import org.lineageos.glimpse.ext.fade
 import org.lineageos.glimpse.ext.setBarsVisibility
+import org.lineageos.glimpse.home.GalleryFolderActions
+import org.lineageos.glimpse.home.GalleryStore
 import org.lineageos.glimpse.models.Album
 import org.lineageos.glimpse.models.AlbumType
 import org.lineageos.glimpse.models.Media
@@ -61,6 +68,7 @@ import org.lineageos.glimpse.viewmodels.IntentsViewModel
 import org.lineageos.glimpse.viewmodels.IntentsViewModel.ParsedIntent
 import org.lineageos.glimpse.viewmodels.LocalPlayerViewModel
 import java.text.SimpleDateFormat
+import java.util.Date
 
 /**
  * An activity used to view one or mode medias.
@@ -73,20 +81,25 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
     // Views
     private val adjustButton by lazy { findViewById<MaterialButton>(R.id.adjustButton) }
     private val appBarLayout by lazy { findViewById<AppBarLayout>(R.id.appBarLayout) }
+    private val backButton by lazy { findViewById<MaterialButton>(R.id.backButton) }
     private val bottomSheetLinearLayout by lazy { findViewById<LinearLayout>(R.id.bottomSheetLinearLayout) }
     private val deleteButton by lazy { findViewById<MaterialButton>(R.id.deleteButton) }
     private val favoriteButton by lazy { findViewById<MaterialButton>(R.id.favoriteButton) }
-    private val infoButton by lazy { toolbar.menu.findItem(R.id.info) }
+    private val mediaDateTextView by lazy { findViewById<TextView>(R.id.mediaDateTextView) }
+    private val mediaSourceTextView by lazy { findViewById<TextView>(R.id.mediaSourceTextView) }
+    private val moreButton by lazy { findViewById<MaterialButton>(R.id.moreButton) }
     private val motionPhotoToggleButton by lazy { findViewById<MaterialButton>(R.id.motionPhotoToggleButton) }
+    private val rotateButton by lazy { findViewById<MaterialButton>(R.id.rotateButton) }
     private val shareButton by lazy { findViewById<MaterialButton>(R.id.shareButton) }
-    private val toolbar by lazy { findViewById<MaterialToolbar>(R.id.toolbar) }
-    private val useAsButton by lazy { toolbar.menu.findItem(R.id.useAs) }
+    private val viewerRoot by lazy { findViewById<View>(R.id.viewerRoot) }
     private val viewPager by lazy { findViewById<ViewPager2>(R.id.viewPager) }
 
     // System services
     private val keyguardManager by lazy { getSystemService(KeyguardManager::class.java) }
 
     private var lastVideoUriPlayed: Uri? = null
+    private var moreActionsPopup: PopupMenu? = null
+    private var preparingFolderTransfer = false
 
     // Adapter
     private val mediaViewerAdapter by lazy {
@@ -190,23 +203,22 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
             setShowWhenLocked(true)
         }
 
-        ViewCompat.setOnApplyWindowInsetsListener(bottomSheetLinearLayout) { _, windowInsets ->
+        val actionPadding = resources.getDimensionPixelSize(R.dimen.viewer_action_padding)
+        ViewCompat.setOnApplyWindowInsetsListener(viewerRoot) { _, windowInsets ->
             val insets = windowInsets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             )
 
-            // Avoid updating the sheets height when they're hidden.
-            // Once the system bars will be made visible again, this function
-            // will be called again.
-            if (!viewModel.fullscreenMode.value) {
-                bottomSheetLinearLayout.updatePadding(
-                    left = insets.left,
-                    right = insets.right,
-                    bottom = insets.bottom
-                )
-
-                updateSheetsHeight()
-            }
+            appBarLayout.updatePadding(
+                left = insets.left, top = insets.top, right = insets.right,
+            )
+            bottomSheetLinearLayout.updatePadding(
+                left = actionPadding + insets.left,
+                right = actionPadding + insets.right,
+                bottom = actionPadding + insets.bottom,
+            )
+            viewPager.updatePadding(left = insets.left, right = insets.right)
+            viewerRoot.post(::updateSheetsHeight)
 
             windowInsets
         }
@@ -214,42 +226,35 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
         // Attach the adapter to the view pager
         viewPager.adapter = mediaViewerAdapter
 
-        toolbar.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.info -> {
-                    viewModel.displayedMedia.value?.let {
-                        MediaInfoBottomSheetDialog(
-                            this@ViewActivity,
-                            it,
-                            mediaInfoBottomSheetDialogCallbacks,
-                            viewModel.secure.value,
-                        ).show()
-                    }
-                    true
-                }
+        backButton.setOnClickListener {
+            finish()
+        }
 
-                R.id.useAs -> {
-                    viewModel.displayedMedia.value?.let {
-                        startActivity(Intent.createChooser(buildUseAsIntent(it), null))
-                    }
-                    true
-                }
+        moreButton.setOnClickListener { showMoreActions() }
 
-                else -> false
+        rotateButton.setOnClickListener {
+            requestedOrientation = when (resources.configuration.orientation) {
+                Configuration.ORIENTATION_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                else -> ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
             }
         }
 
-        toolbar.setNavigationOnClickListener {
-            finish()
+        appBarLayout.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateSheetsHeight()
+        }
+        bottomSheetLinearLayout.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            updateSheetsHeight()
         }
 
         favoriteButton.setOnClickListener {
             viewModel.displayedMedia.value?.let {
-                favoriteContract.launch(
-                    contentResolver.createFavoriteRequest(
-                        !it.isFavorite, it.uri
+                dismissKeyguardAndRun {
+                    favoriteContract.launch(
+                        contentResolver.createFavoriteRequest(
+                            !it.isFavorite, it.uri
+                        )
                     )
-                )
+                }
             }
         }
 
@@ -289,11 +294,12 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
 
         deleteButton.setOnLongClickListener {
             viewModel.displayedMedia.value?.let {
-                MediaDialogsUtils.openDeleteForeverDialog(this, it.uri) { uris ->
-                    deleteUriContract.launch(contentResolver.createDeleteRequest(*uris))
+                dismissKeyguardAndRun {
+                    MediaDialogsUtils.openDeleteForeverDialog(this, it.uri) { uris ->
+                        deleteUriContract.launch(contentResolver.createDeleteRequest(*uris))
+                    }
                 }
-
-                true
+                return@setOnLongClickListener true
             }
 
             false
@@ -334,6 +340,7 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
 
     override fun onDestroy() {
         saveCurrentVideoPosition()
+        moreActionsPopup?.dismiss()
 
         removeOnNewIntentListener(intentListener)
 
@@ -426,10 +433,8 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
 
                     window.setBarsVisibility(systemBars = !fullscreenMode)
 
-                    // If the sheets are being made visible again, update the values
-                    if (!fullscreenMode) {
-                        updateSheetsHeight()
-                    }
+                    ViewCompat.requestApplyInsets(viewerRoot)
+                    viewerRoot.post(::updateSheetsHeight)
                 }
             }
 
@@ -437,11 +442,15 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
                 viewModel.displayedMedia.collectLatest { displayedMedia ->
                     // Update date and time text
                     displayedMedia?.also {
-                        toolbar.title = dateFormatter.format(it.dateModified)
-                        toolbar.subtitle = timeFormatter.format(it.dateModified)
+                        val captureDate = captureDate(it)
+                        mediaDateTextView.text = dateFormatter.format(captureDate)
+                        val time = timeFormatter.format(captureDate)
+                        mediaSourceTextView.text = it.albumName?.takeIf(String::isNotBlank)?.let { source ->
+                            getString(R.string.viewer_time_source, time, source)
+                        } ?: time
                     } ?: run {
-                        toolbar.title = ""
-                        toolbar.subtitle = ""
+                        mediaDateTextView.text = ""
+                        mediaSourceTextView.text = ""
                     }
 
                     // Update favorite button
@@ -449,20 +458,30 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
                     favoriteButton.isSelected = isFavorite
                     favoriteButton.setText(
                         when (isFavorite) {
+                            true -> R.string.viewer_favorited
+                            false -> R.string.viewer_favorite
+                        }
+                    )
+                    favoriteButton.contentDescription = getString(
+                        when (isFavorite) {
                             true -> R.string.file_action_remove_from_favorites
                             false -> R.string.file_action_add_to_favorites
                         }
                     )
-
-                    // Update info button
-                    infoButton.isVisible = displayedMedia != null
+                    moreButton.isEnabled = displayedMedia != null
 
                     // Update delete button
                     val isTrashed = displayedMedia?.isTrashed ?: false
                     deleteButton.text = when (isTrashed) {
-                        true -> getString(R.string.file_action_restore_from_trash)
-                        false -> getString(R.string.file_action_move_to_trash)
+                        true -> getString(R.string.viewer_restore)
+                        false -> getString(R.string.viewer_delete)
                     }
+                    deleteButton.contentDescription = getString(
+                        when (isTrashed) {
+                            true -> R.string.file_action_restore_from_trash
+                            false -> R.string.file_action_move_to_trash
+                        }
+                    )
                     deleteButton.setCompoundDrawablesWithIntrinsicBounds(
                         0,
                         when (isTrashed) {
@@ -506,9 +525,10 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
             }
 
             launch {
+                // Keep the WhileSubscribed secure state active even when the menu is closed.
                 viewModel.secure.collectLatest { secure ->
-                    // Update use as button
-                    useAsButton.isVisible = !secure
+                    moreActionsPopup?.menu?.findItem(R.id.useAs)?.isVisible =
+                        !secure && !keyguardManager.isKeyguardLocked
                 }
             }
 
@@ -569,15 +589,102 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
     }
 
     private fun updateSheetsHeight() {
-        appBarLayout.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        bottomSheetLinearLayout.measure(
-            View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED
-        )
-
         viewModel.setSheetsHeight(
-            appBarLayout.measuredHeight,
-            bottomSheetLinearLayout.measuredHeight,
+            appBarLayout.height,
+            bottomSheetLinearLayout.height,
         )
+    }
+
+    private fun showMoreActions() {
+        val media = viewModel.displayedMedia.value ?: return
+        PopupMenu(this, moreButton).apply {
+            moreActionsPopup = this
+            menuInflater.inflate(R.menu.activity_view_toolbar, menu)
+            menu.findItem(R.id.useAs).isVisible =
+                !viewModel.secure.value && !keyguardManager.isKeyguardLocked
+            val canTransfer = !viewModel.readOnly.value && !media.isTrashed
+            menu.findItem(R.id.moveToFolder).isVisible = canTransfer
+            menu.findItem(R.id.copyToFolder).isVisible = canTransfer
+            setOnDismissListener { moreActionsPopup = null }
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.info -> {
+                        MediaInfoBottomSheetDialog(
+                            this@ViewActivity,
+                            media,
+                            mediaInfoBottomSheetDialogCallbacks,
+                            viewModel.secure.value || keyguardManager.isKeyguardLocked,
+                        ).show()
+                        true
+                    }
+                    R.id.useAs -> {
+                        if (!viewModel.secure.value && !keyguardManager.isKeyguardLocked) {
+                            startActivity(Intent.createChooser(buildUseAsIntent(media), null))
+                        }
+                        true
+                    }
+                    R.id.moveToFolder, R.id.copyToFolder -> {
+                        showFolderDestination(media, item.itemId == R.id.copyToFolder)
+                        true
+                    }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    private fun showFolderDestination(media: Media, copy: Boolean) {
+        if (viewModel.readOnly.value || media.isTrashed) return
+        dismissKeyguardAndRun {
+            if (preparingFolderTransfer || viewModel.readOnly.value || keyguardManager.isKeyguardLocked) {
+                return@dismissKeyguardAndRun
+            }
+            preparingFolderTransfer = true
+            lifecycleScope.launch {
+                try {
+                    val photo = withContext(Dispatchers.IO) {
+                        val photos = GalleryStore(applicationContext).readPhotos()
+                        photos.firstOrNull { it.key == media.uri.toString() } ?: run {
+                            // Older Review intents use the merged external volume. Only MediaStore
+                            // URIs may fall back to their ID; arbitrary provider IDs are unrelated.
+                            val mergedId = media.uri.takeIf {
+                                it.scheme == "content" && it.authority == "media" &&
+                                    it.pathSegments.firstOrNull() == MediaStore.VOLUME_EXTERNAL
+                            }?.let { runCatching { ContentUris.parseId(it) }.getOrNull() }
+                            photos.firstOrNull {
+                                mergedId != null && it.media.mediaType == media.mediaType &&
+                                    ContentUris.parseId(it.media.uri) == mergedId
+                            }
+                        }
+                    }
+                    if (photo == null) {
+                        Toast.makeText(this@ViewActivity, R.string.folder_action_missing, Toast.LENGTH_LONG).show()
+                    } else if (!keyguardManager.isKeyguardLocked) {
+                        GalleryFolderActions.showDestination(this@ViewActivity, listOf(photo), copy)
+                    }
+                } catch (failure: CancellationException) {
+                    throw failure
+                } catch (_: SecurityException) {
+                    Toast.makeText(this@ViewActivity, R.string.folder_action_access, Toast.LENGTH_LONG).show()
+                } catch (_: Exception) {
+                    Toast.makeText(this@ViewActivity, R.string.folder_action_failed, Toast.LENGTH_LONG).show()
+                } finally {
+                    preparingFolderTransfer = false
+                }
+            }
+        }
+    }
+
+    private suspend fun captureDate(media: Media): Date = withContext(Dispatchers.IO) {
+        // Keep the viewer date consistent with the timeline after a copy or rename changes mtime.
+        val taken = runCatching {
+            contentResolver.query(media.uri, arrayOf(MediaStore.MediaColumns.DATE_TAKEN),
+                null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getLong(0).takeIf { it > 0 } else null
+            }
+        }.getOrNull()
+        Date(taken ?: media.dateModified.time.takeIf { it > 0 } ?: media.dateAdded.time)
     }
 
     private fun dismissKeyguardAndRun(runnable: () -> Unit) {
@@ -600,8 +707,8 @@ class ViewActivity : AppCompatActivity(R.layout.activity_view) {
     companion object {
         private val LOG_TAG = ViewActivity::class.simpleName!!
 
-        private val dateFormatter = SimpleDateFormat.getDateInstance()
-        private val timeFormatter = SimpleDateFormat.getTimeInstance()
+        private val dateFormatter = SimpleDateFormat.getDateInstance(SimpleDateFormat.LONG)
+        private val timeFormatter = SimpleDateFormat.getTimeInstance(SimpleDateFormat.SHORT)
 
         val EXTRA_ALBUM_TYPE = "${ViewActivity::class.qualifiedName}.album_type"
         val EXTRA_ALBUM_URI = "${ViewActivity::class.qualifiedName}.album_uri"

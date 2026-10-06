@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-FileCopyrightText: 2026 The ArkUI Project
+     SPDX-License-Identifier: Apache-2.0 -->
+<resources>
+    <string name="folder_action_move_to">Move to folder</string>
+    <string name="folder_action_copy_to">Copy to folder</string>
+    <string name="folder_action_move">Move</string>
+    <string name="folder_action_copy">Copy</string>
+    <string name="folder_action_loading">Loading folders…</string>
+    <string name="folder_action_new_folder">New folder</string>
+    <string name="folder_action_create_and_continue">Create and continue</string>
+    <string name="folder_action_name">Folder name</string>
+    <string name="folder_action_no_folders">Create a folder to choose a destination.</string>
+    <string name="folder_action_no_media">No media selected</string>
+    <string name="folder_action_unlock">Unlock your device to manage media.</string>
+    <string name="folder_action_create_location">Create in %1$s</string>
+    <string name="folder_action_default_location">Pictures/ · Internal storage</string>
+    <string name="folder_action_destination_label">%1$s\n%2$s</string>
+    <string name="folder_action_internal_storage">Internal storage</string>
+    <string name="folder_action_moving">Moving media…</string>
+    <string name="folder_action_copying">Copying media…</string>
+    <string name="folder_action_copy_result">Copied %1$d · Skipped %2$d · Failed %3$d</string>
+    <string name="folder_action_move_result">Moved %1$d · Skipped %2$d · Failed %3$d</string>
+    <string name="folder_action_result_error">%1$s\n%2$s</string>
+    <string name="folder_action_invalid_name">Enter a folder name without /, \\, or hidden prefixes.</string>
+    <string name="folder_action_exists">A folder with this name already exists.</string>
+    <string name="folder_action_missing">This folder or media is no longer available.</string>
+    <string name="folder_action_access">Allow gallery access to manage these files in Settings.</string>
+    <string name="folder_action_other_files">The folder contains files that cannot be managed by the gallery.</string>
+    <string name="folder_action_failed">Could not complete the file operation.</string>
+</resources>

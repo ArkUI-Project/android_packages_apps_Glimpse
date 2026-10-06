@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: The LineageOS Project
+ * SPDX-FileCopyrightText: 2026 The ArkUI Project
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -105,21 +106,30 @@ class MediaViewerAdapter(
         }
 
         private val sheetsHeightObserver = { sheetsHeight: Pair<Int, Int> ->
-            if (!localPlayerViewModel.fullscreenMode.value) {
-                val (topHeight, bottomHeight) = sheetsHeight
-
-                // Place the player controls between the two sheets
-                playerControlView.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-                    topMargin = topHeight
-                    bottomMargin = bottomHeight
-                }
-            }
+            updateContentInsets(sheetsHeight)
         }
 
         @OptIn(androidx.media3.common.util.UnstableApi::class)
         private val fullscreenModeObserver = { fullscreenMode: Boolean ->
-            if (media?.mediaType == MediaType.VIDEO) {
+            updateContentInsets(localPlayerViewModel.sheetsHeight.value)
+            if (media?.mediaType == MediaType.VIDEO || motionPhoto != null) {
                 playerControlView.fade(!fullscreenMode)
+            }
+        }
+
+        private fun updateContentInsets(sheetsHeight: Pair<Int, Int>) {
+            val (topHeight, bottomHeight) = when (localPlayerViewModel.fullscreenMode.value) {
+                true -> 0 to 0
+                false -> sheetsHeight
+            }
+            // Fit the complete image and player between the solid header and action capsule.
+            // Player controls already live inside the fitted player; adding the sheet margins
+            // to those controls again would squeeze the video controls in landscape.
+            listOf(imageView, playerView).forEach { content ->
+                content.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+                    topMargin = topHeight
+                    bottomMargin = bottomHeight
+                }
             }
         }
 

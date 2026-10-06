@@ -1,20 +1,17 @@
 /*
  * SPDX-FileCopyrightText: The LineageOS Project
+ * SPDX-FileCopyrightText: 2026 The ArkUI Project
  * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.lineageos.glimpse.ui.recyclerview
 
-import android.graphics.RenderEffect
-import android.graphics.Shader
-import android.os.Build
 import android.text.format.DateUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.annotation.RequiresApi
 import androidx.core.view.isVisible
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
@@ -171,16 +168,7 @@ class ThumbnailAdapter : ListAdapter<AlbumViewModel.AlbumContent, RecyclerView.V
 
             videoOverlayImageView.isVisible = media.mediaType == MediaType.VIDEO
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                thumbnailImageView.setRenderEffect(
-                    when (isSelected) {
-                        true -> blurRenderEffect
-                        false -> null
-                    }
-                )
-            } else {
-                selectionScrimView.isVisible = isSelected
-            }
+            selectionScrimView.isVisible = isSelected
 
             selectionCheckedImageView.setImageResource(
                 when (isSelected) {
@@ -204,13 +192,4 @@ class ThumbnailAdapter : ListAdapter<AlbumViewModel.AlbumContent, RecyclerView.V
         }
     }
 
-    companion object {
-        private const val BLUR_RADIUS = 15f
-
-        @RequiresApi(Build.VERSION_CODES.S)
-        private val blurRenderEffect = RenderEffect.createBlurEffect(
-            BLUR_RADIUS, BLUR_RADIUS,
-            Shader.TileMode.MIRROR
-        )
-    }
 }
